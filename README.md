@@ -11,9 +11,9 @@
 
 **Windows 10 2004+, x64:** [установщик](https://github.com/moz9/TGDeblocker-GUI/releases/latest) с выбором папки. Обновления проверяются в разделе «Настройки» приложения.
 
-**Android 8+, ARM64:** [APK](https://github.com/moz9/TGDeblocker-GUI/releases/tag/android-v1.0.0). Устанавливается вручную; обновление Android внутри приложения пока не реализовано.
+**Android 8+, ARM64:** [APK](https://github.com/moz9/TGDeblocker-GUI/releases/tag/android-v1.0.1). Подключение к Telegram уже настроено — нужен только вход в свой аккаунт. Устанавливается вручную; обновление Android внутри приложения пока не реализовано.
 
-В Windows настройки и локальная сессия хранятся в `%LOCALAPPDATA%\TGDeblocker` и сохраняются при обновлении. При удалении программы их можно удалить отдельно. Для подключения нужны API ID и API Hash с [my.telegram.org](https://my.telegram.org/apps). Реальный вход пока не тестировался.
+В Windows настройки и локальная сессия хранятся в `%LOCALAPPDATA%\TGDeblocker` и сохраняются при обновлении. При удалении программы их можно удалить отдельно. Windows 1.1.0 пока требует API ID и API Hash с [my.telegram.org](https://my.telegram.org/apps). Реальный вход пока не тестировался.
 
 ## Сборка
 

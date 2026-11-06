@@ -11,8 +11,8 @@
     <Nullable>enable</Nullable>
     <ApplicationTitle>TGDeblocker</ApplicationTitle>
     <ApplicationId>app.tgdeblocker.mobile</ApplicationId>
-    <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
-    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0.1</ApplicationDisplayVersion>
+    <ApplicationVersion>2</ApplicationVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">26.0</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
     <AndroidPackageFormats>aab;apk</AndroidPackageFormats>
@@ -28,6 +28,7 @@
     <MauiIcon Include="Resources/AppIcon/appicon.svg" Color="#268FE6" />
     <MauiSplashScreen Include="Resources/AppIcon/appicon.svg" Color="#FFFFFF" BaseSize="96,96" />
     <MauiAsset Include="Resources/Raw/**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="$(TelegramApiCredentialsFile)" LogicalName="TGDeblocker.Mobile.telegram-api.json" Condition="'$(TelegramApiCredentialsFile)' != '' and Exists('$(TelegramApiCredentialsFile)')" />
   </ItemGroup>
   <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
     <AndroidNativeLibrary Include="Native/Android/arm64-v8a/*.so" Condition="'$(RuntimeIdentifier)' == 'android-arm64' or $([System.String]::Copy('$(RuntimeIdentifiers)').Contains('android-arm64'))" />
@@ -44,6 +45,7 @@
     <DefineConstants>$(DefineConstants);TDLIB_IOS_NATIVE</DefineConstants>
   </PropertyGroup>
   <Target Name="RequireNativeTelegramForRelease" BeforeTargets="PrepareForBuild" Condition="'$(Configuration)' == 'Release'">
+    <Error Condition="'$(TelegramApiCredentialsFile)' == '' or !Exists('$(TelegramApiCredentialsFile)')" Text="Release builds require the publisher's Telegram API configuration. Use tools/build-mobile.ps1; see the mobile README." />
     <Error Condition="'$(TargetFramework)' == 'net10.0-android' and ('$(RuntimeIdentifier)' == 'android-arm64' or $([System.String]::Copy('$(RuntimeIdentifiers)').Contains('android-arm64'))) and !Exists('Native/Android/arm64-v8a/libtdjson.so')" Text="Build the ARM64 TDLib library first; see tools/README-tdlib-mobile.md." />
     <Error Condition="'$(TargetFramework)' == 'net10.0-android' and ('$(RuntimeIdentifier)' == 'android-x64' or $([System.String]::Copy('$(RuntimeIdentifiers)').Contains('android-x64'))) and !Exists('Native/Android/x86_64/libtdjson.so')" Text="Build the x86_64 TDLib library first; see tools/README-tdlib-mobile.md." />
     <Error Condition="'$(TargetFramework)' == 'net10.0-ios' and !Exists('Native/iOS/TDLib.xcframework')" Text="Build TDLib.xcframework on macOS before creating an iOS release." />

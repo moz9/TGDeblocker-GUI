@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Devices;
 using TGDeblocker.Core;
@@ -16,6 +17,27 @@ public static class MobileTelegramFactory
     private const string ApiCredentialsKey = "telegram-api-v1";
     private const string SessionKey = "tdlib-database-key-v1";
     private static readonly SemaphoreSlim SessionStorageGate = new(1);
+    private static readonly Lazy<TelegramApiCredentials?> BundledApi = new(ReadBundledApi);
+
+    public static bool HasBundledApiCredentials => BundledApi.Value is not null;
+
+    public static async Task<bool> HasSavedApiCredentialsAsync()
+    {
+        try { return await TdDeviceStorage.GetAsync(ApiCredentialsKey) is not null; }
+        catch (Exception) { return true; } // Keep manual recovery available if secure storage cannot be read.
+    }
+
+    private static TelegramApiCredentials? ReadBundledApi()
+    {
+        using var stream = typeof(MobileTelegramFactory).Assembly.GetManifestResourceStream("TGDeblocker.Mobile.telegram-api.json");
+        if (stream is null) return null; // Development builds can use their own API credentials.
+        using var json = JsonDocument.Parse(stream);
+        var apiId = json.RootElement.GetProperty("ApiId").GetInt32();
+        var apiHash = json.RootElement.GetProperty("ApiHash").GetString();
+        if (!IsValidApiCredentials(apiId, apiHash.AsSpan()))
+            throw new InvalidDataException("The application's Telegram configuration is invalid.");
+        return new TelegramApiCredentials(apiId, apiHash!);
+    }
 
     public static ITelegramService CreateService(string language)
     {
@@ -33,7 +55,7 @@ public static class MobileTelegramFactory
         var value = await TdDeviceStorage.GetAsync(ApiCredentialsKey).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested();
         if (value is null)
-            return null;
+            return BundledApi.Value;
 
         var separator = value.IndexOf(':');
         if (separator <= 0 || !int.TryParse(value.AsSpan(0, separator), NumberStyles.None, CultureInfo.InvariantCulture, out var apiId) ||

@@ -2,11 +2,15 @@
 
 MAUI 10, общее ядро `TGDeblocker.Core` и официальный TDLib. Android 8+, ARM64. Русский и английский языки; тема и язык по умолчанию следуют системе.
 
+В опубликованном APK уже настроено подключение к Telegram. Пользователь входит в свой аккаунт; создавать приложение на my.telegram.org не требуется.
+
 На Android 13+ Liquid Glass преломляет содержимое приложения через RenderNode/AGSL. На Android 8–12 используется упрощённый материал. Есть настройки уменьшения движения и непрозрачных поверхностей.
 
 ## Сборка
 
 Нужны .NET SDK 10.0.403, workload `maui-android`, Android SDK 36 и JDK 17. Сначала [соберите TDLib](../../tools/README-tdlib-mobile.md). На Windows используйте checkout с латинским путём — AAPT2 может не обрабатывать кириллицу.
+
+Release собирайте через `tools/build-mobile.ps1`: он проверяет реквизиты до компиляции. Разработчик регистрирует свой API ID/API Hash один раз. Передайте `-TelegramApiCredentialsFile <внешний telegram-api.json>` с полями `ApiId` (число) и `ApiHash` (строка). На компьютере издателя скрипт также читает `%LOCALAPPDATA%/TGDeblocker-Publisher/telegram-api.dpapi`. Исходный файл держите вне репозитория. Реквизиты включаются в APK и могут быть извлечены из него; это не сессия пользователя. Release без конфигурации запрещён. Debug без неё сохраняет ручную настройку.
 
 ```powershell
 ./tools/build-mobile.ps1 -Runtime android-arm64 -AndroidSdk <sdk> -JavaSdk <jdk>

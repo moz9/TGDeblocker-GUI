@@ -24,6 +24,7 @@ if call('emu', 'avd', 'name').decode().splitlines()[0].strip() != 'TGDeblocker_A
 if call('shell', 'getprop', 'sys.boot_completed').strip() != b'1':
     raise RuntimeError('The test emulator has not booted.')
 args.output.mkdir(parents=True, exist_ok=True)
+(args.output / 'crash.log').unlink(missing_ok=True)
 component = call('shell', 'cmd', 'package', 'resolve-activity', '--brief', package).decode().strip().splitlines()[-1]
 if not component.startswith(package + '/'):
     raise RuntimeError('Application launch activity not found.')
@@ -108,6 +109,9 @@ wait('Two-step verification is enabled')
 print('PASS demo password form and service survive background', flush=True)
 
 tap('Settings', 'content-desc')
+if any(n.attrib.get('text') == 'Telegram connection' for n in nodes()):
+    raise RuntimeError('Publisher API configuration is missing from this release.')
+print('PASS publisher API configuration loaded in Release', flush=True)
 tap('System')
 tap('Dark')
 wait('Leave demo')

@@ -15,3 +15,4 @@ src/TGDeblocker.Mobile/Native/
 *.jks
 *.p12
 *.mobileprovision
+telegram-api.json

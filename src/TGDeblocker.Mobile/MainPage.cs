@@ -176,7 +176,7 @@ public sealed class MainPage : ContentPage
         {
             case 1: await ShowDevicesAsync(); break;
             case 2: await ShowSecurityAsync(); break;
-            case 3: ShowSettings(); break;
+            case 3: await ShowSettingsAsync(); break;
             default: if (_service != null && _account == null) ShowAuthorization(); else ShowHome(); break;
         }
     }
@@ -362,8 +362,10 @@ public sealed class MainPage : ContentPage
         _body.Add(Action(T("Назад", "Back"), ShowSecurityAsync));
     }
 
-    private void ShowSettings()
+    private async Task ShowSettingsAsync()
     {
+        bool showConnection = !MobileTelegramFactory.HasBundledApiCredentials || await MobileTelegramFactory.HasSavedApiCredentialsAsync();
+        if (_destroyed) return;
         Header(T("Настройки", "Settings"));
         void AddChoice(string caption, Picker picker)
         {
@@ -384,7 +386,7 @@ public sealed class MainPage : ContentPage
         AddChoice(T("Тема", "Theme"), theme);
         var languages = new Picker { Title = T("Язык", "Language"), ItemsSource = new[] { T("Автоматически", "Automatic"), "Русский", "English" } };
         languages.SelectedIndex = Preferences.Default.Get("language", "auto") switch { "ru" => 1, "en" => 2, _ => 0 };
-        languages.SelectedIndexChanged += (_, _) => { Preferences.Default.Set("language", languages.SelectedIndex switch { 1 => "ru", 2 => "en", _ => "auto" }); RefreshNavigation(); ApplyAppearance(); ShowSettings(); };
+        languages.SelectedIndexChanged += async (_, _) => { Preferences.Default.Set("language", languages.SelectedIndex switch { 1 => "ru", 2 => "en", _ => "auto" }); RefreshNavigation(); ApplyAppearance(); await RunAsync(ShowSettingsAsync); };
         AddChoice(T("Язык", "Language"), languages);
         _body.Add(Text("Liquid Glass", 15));
         var slider = new GlassSlider { Value = _glass.Density, Density = _glass.Density, ReduceMotion = _glass.ReduceMotion, ReduceTransparency = _glass.ReduceTransparency, IsEnabled = !_glass.ReduceTransparency, IsDark = _glass.IsDark, HeightRequest = 58 };
@@ -407,15 +409,16 @@ public sealed class MainPage : ContentPage
         }
         AddToggle(T("Непрозрачные поверхности", "Opaque surfaces"), "reduceTransparency", value => { _glass.ReduceTransparency = slider.ReduceTransparency = value; slider.IsEnabled = !value; UpdateTransparencyNotice(); });
         AddToggle(T("Уменьшить движение", "Reduce motion"), "reduceMotion", value => _glass.ReduceMotion = slider.ReduceMotion = value);
-        _body.Add(Action(T("Сбросить оформление", "Reset appearance"), () =>
+        _body.Add(Action(T("Сбросить оформление", "Reset appearance"), async () =>
         {
             Preferences.Default.Set("density", .12); Preferences.Default.Set("reduceTransparency", false); Preferences.Default.Set("reduceMotion", false);
             Preferences.Default.Set("theme", "system");
             if (Application.Current is App app) app.ApplyThemePreference();
-            ApplyAppearance(); ShowSettings(); return Task.CompletedTask;
+            ApplyAppearance(); await ShowSettingsAsync();
         }));
         _body.Add(Action(T("Конфиденциальность", "Privacy"), ShowPrivacyAsync));
-        _body.Add(Action(T("Подключение Telegram", "Telegram connection"), ConfigureConnectionAsync));
+        if (showConnection)
+            _body.Add(Action(T("Подключение Telegram", "Telegram connection"), ConfigureConnectionAsync));
         if (_service != null) _body.Add(Action(_service.IsDemo ? T("Выйти из демонстрации", "Leave demo") : T("Отключить приложение", "Disconnect this app"), RevokeConnectionAsync));
 #if ANDROID && DEBUG
         if (Microsoft.Maui.ApplicationModel.Platform.CurrentActivity?.Intent?.GetBooleanExtra("glass_test_scroll", false) == true)
