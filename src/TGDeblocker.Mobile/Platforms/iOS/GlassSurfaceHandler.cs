@@ -16,6 +16,7 @@ public sealed class GlassSurfaceHandler : ViewHandler<GlassSurface, NativeGlassS
         [nameof(GlassSurface.ReduceMotion)] = Update,
         [nameof(GlassSurface.ReduceTransparency)] = Update,
         [nameof(GlassSurface.SelectedIndex)] = Update,
+        [nameof(GlassSurface.SelectionPosition)] = Update,
         [nameof(GlassSurface.IsPressed)] = Update,
         [nameof(GlassSurface.IsDark)] = Update,
     };
@@ -36,6 +37,7 @@ public sealed class NativeGlassSurface : UIView
     readonly NSObject _accessibilityObserver;
     GlassSurface? _model;
     int _selected;
+    double _selectedPosition;
     bool _pressed, _autoLift;
     NSTimer? _releaseTimer;
 
@@ -110,6 +112,8 @@ public sealed class NativeGlassSurface : UIView
             _glass.BackgroundColor = UIColor.Clear;
         }
         var selectionChanged = _selected != model.SelectedIndex;
+        var nextPosition = model.SelectionPosition >= 0 ? model.SelectionPosition : model.SelectedIndex;
+        var positionChanged = Math.Abs(_selectedPosition - nextPosition) > .000001;
         bool reduced = model.ReduceMotion || UIAccessibility.IsReduceMotionEnabled;
         if (model.IsPressed || reduced)
         {
@@ -126,8 +130,9 @@ public sealed class NativeGlassSurface : UIView
             });
         }
         bool nextPressed = (model.IsPressed || _autoLift) && !reduced;
-        var changed = selectionChanged || _pressed != nextPressed;
+        var changed = selectionChanged || positionChanged || _pressed != nextPressed;
         _selected = model.SelectedIndex;
+        _selectedPosition = nextPosition;
         _pressed = nextPressed;
         SetNeedsLayout();
         if (changed && !model.ReduceMotion && !UIAccessibility.IsReduceMotionEnabled && Window is not null)
@@ -154,11 +159,17 @@ public sealed class NativeGlassSurface : UIView
             _details.Path = path;
         }
         _container.Frame = Bounds;
-        var width = Math.Max(0, Bounds.Width - 32);
-        _glass.Frame = new CGRect(16, Math.Max(0, Bounds.Height - 80), width, 64);
+        var width = GlassDockMetrics.WidthFor(Bounds.Width);
+        var left = (Bounds.Width - width) / 2;
+        var top = Math.Max(0, Bounds.Height - GlassDockMetrics.BottomInset - GlassDockMetrics.Height);
+        _glass.Frame = new CGRect(left, top, width, GlassDockMetrics.Height);
+        _glass.Layer.CornerRadius = (nfloat)(GlassDockMetrics.Height / 2);
         var tabWidth = width / 4;
         var lift = _pressed ? 3 : 0;
-        _indicator.Frame = new CGRect(16 + _selected * tabWidth + 4 - lift, Math.Max(0, Bounds.Height - 75) - lift, Math.Max(0, tabWidth - 8 + 2 * lift), 54 + 2 * lift);
+        var height = GlassDockMetrics.Height - 2 * GlassDockMetrics.SelectedInsetY;
+        _indicator.Frame = new CGRect(left + _selectedPosition * tabWidth + GlassDockMetrics.SelectedInsetX - lift,
+            top + GlassDockMetrics.SelectedInsetY - lift, Math.Max(0, tabWidth - 2 * GlassDockMetrics.SelectedInsetX + 2 * lift), height + 2 * lift);
+        _indicator.Layer.CornerRadius = (nfloat)((height + 2 * lift) / 2);
     }
 
     public void Stop()

@@ -11,10 +11,10 @@ namespace TGDeblocker.Mobile;
 public sealed class MainPage : ContentPage
 {
     private readonly GlassSurface _glass = new() { InputTransparent = true };
-    private readonly VerticalStackLayout _body = new() { Spacing = 14, Padding = new Thickness(24, 10, 24, 116) };
+    private readonly VerticalStackLayout _body = new() { Spacing = 12, Padding = new Thickness(20, 8, 20, 96) };
     private readonly ScrollView _scroll;
-    private readonly Grid _tabs = new() { Margin = new Thickness(16), HeightRequest = 64, ColumnSpacing = 0 };
-    private readonly Label _title = new() { Text = "TGDeblocker", FontSize = 15, FontAttributes = FontAttributes.Bold, VerticalOptions = LayoutOptions.Center };
+    private readonly NavigationBar _tabs;
+    private readonly Label _title = new() { Text = "TGDeblocker", FontSize = 20, FontAttributes = FontAttributes.Bold, VerticalOptions = LayoutOptions.Center };
     private readonly ActivityIndicator _progress = new() { WidthRequest = 20, HeightRequest = 20, IsVisible = false, Color = Color.FromArgb(TelegramPalette.Light.Link) };
     private readonly Button _cancel = new() { FontSize = 12, Padding = 6, IsVisible = false, BackgroundColor = Colors.Transparent };
     private ITelegramService? _service;
@@ -25,6 +25,9 @@ public sealed class MainPage : ContentPage
     private bool _busy, _pendingStatus, _suspended, _destroyed, _presentingAlerts;
     private readonly Queue<(string Title, string Message)> _deferredAlerts = new();
     private int _page;
+    private bool _navigating;
+    private bool _pageLoaded = true;
+    private int? _queuedNavigation;
     private GlassSlider? _densitySlider;
     private string Language => AppStrings.ResolveLanguage(Preferences.Default.Get("language", "auto"), CultureInfo.CurrentUICulture);
     private string T(string ru, string en) => Language == "ru" ? ru : en;
@@ -38,19 +41,22 @@ public sealed class MainPage : ContentPage
 
     public MainPage()
     {
+        _tabs = new NavigationBar(_glass);
+        _tabs.SelectionCommitted += async target => await NavigateAsync(target);
         this.SetAppThemeColor(BackgroundColorProperty, Color.FromArgb(TelegramPalette.Light.Background), Color.FromArgb(TelegramPalette.Dark.Background));
-        _title.SetAppThemeColor(Label.TextColorProperty, Ink, DarkInk);
+        _title.SetAppThemeColor(Label.TextColorProperty, Color.FromArgb(TelegramPalette.Light.Link), DarkAccent);
         _cancel.SetAppThemeColor(Button.TextColorProperty, Color.FromArgb(TelegramPalette.Light.Link), DarkAccent);
         _progress.SetAppThemeColor(ActivityIndicator.ColorProperty, Color.FromArgb(TelegramPalette.Light.Link), DarkAccent);
         SafeAreaEdges = new Microsoft.Maui.SafeAreaEdges(SafeAreaRegions.Container);
-        var layout = new Grid { RowDefinitions = { new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star), new RowDefinition(96) } };
+        var layout = new Grid { RowDefinitions = { new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star), new RowDefinition(GlassDockMetrics.Height + 2 * GlassDockMetrics.BottomInset) } };
+        layout.SizeChanged += (_, _) => _tabs.SetAvailableWidth(layout.Width);
 #if ANDROID
         bool liveBackdrop = OperatingSystem.IsAndroidVersionAtLeast(33);
 #else
         bool liveBackdrop = true;
 #endif
         if (!liveBackdrop) { layout.Add(_glass); Grid.SetRowSpan(_glass, 3); }
-        var header = new Grid { Padding = new Thickness(24, 10, 20, 2), ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto) } };
+        var header = new Grid { Padding = new Thickness(20, 8, 20, 8), ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Auto) } };
         header.Add(_title); header.Add(_progress, 1); header.Add(_cancel, 2);
         _cancel.Clicked += (_, _) => _operation?.Cancel();
         layout.Add(header);
@@ -83,23 +89,45 @@ public sealed class MainPage : ContentPage
         _glass.IsDark = isDark;
         _glass.InvalidateBackdrop();
         if (_densitySlider is not null) _densitySlider.IsDark = isDark;
+        RefreshNavigation();
     }
 
     private void RefreshNavigation()
     {
-        _tabs.Clear(); _tabs.ColumnDefinitions.Clear();
-        string[] labels = [T("Начало", "Home"), T("Устройства", "Devices"), T("Защита", "Security"), T("Настройки", "Settings")];
-        for (int i = 0; i < labels.Length; i++)
+        string[] labels = [T("Аккаунт", "Account"), T("Устройства", "Devices"), T("Защита", "Security"), T("Настройки", "Settings")];
+        _tabs.Update(labels, _page, Application.Current?.RequestedTheme == AppTheme.Dark);
+    }
+
+    private async Task NavigateAsync(int target)
+    {
+        if (_destroyed || _suspended || _presentingAlerts || (_busy && !_navigating)) return;
+        if (!_navigating && target == _page && _pageLoaded) return;
+        if (_navigating)
         {
-            int target = i;
-            _tabs.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
-            var button = new Button { Text = labels[i], FontSize = 11, Padding = 2, CornerRadius = 24, BackgroundColor = Colors.Transparent };
-            button.SetAppThemeColor(Button.TextColorProperty, i == _page ? Color.FromArgb(TelegramPalette.Light.Link) : Muted, i == _page ? DarkAccent : DarkMuted);
-            SemanticProperties.SetDescription(button, labels[i]);
-            button.Pressed += (_, _) => _glass.SetSelectionPressed(true);
-            button.Released += (_, _) => _glass.SetSelectionPressed(false);
-            button.Clicked += async (_, _) => await RunAsync(async () => { _page = target; RefreshNavigation(); ApplyAppearance(); await ShowPageAsync(); });
-            _tabs.Add(button, i);
+            if (target == _page && _queuedNavigation is null && _operation?.IsCancellationRequested != true) return;
+            _queuedNavigation = target;
+            _operation?.Cancel(); // Only the previous read-only page load is being cancelled.
+            return;
+        }
+        _navigating = true;
+        try
+        {
+            do
+            {
+                _queuedNavigation = null;
+                await RunAsync(async () =>
+                {
+                    _page = target; _pageLoaded = false; RefreshNavigation(); ApplyAppearance();
+                    await ShowPageAsync();
+                    _pageLoaded = true;
+                }, navigation: true);
+                target = _queuedNavigation ?? -1;
+            } while (target >= 0 && !_suspended && !_destroyed);
+        }
+        finally
+        {
+            _navigating = false;
+            if (!_suspended || _destroyed) _queuedNavigation = null;
         }
     }
 
@@ -162,11 +190,11 @@ public sealed class MainPage : ContentPage
         button.Clicked += async (_, _) => await RunAsync(action);
         return button;
     }
-    private void Header(string title)
+    private void Header(string? title)
     {
         _body.Clear();
         _densitySlider = null;
-        _body.Add(Text(title, 24));
+        if (!string.IsNullOrEmpty(title)) _body.Add(Text(title, 24));
         if (_service?.IsDemo == true) _body.Add(Text(T("Демонстрация · учебные данные", "Demo · sample data"), 12, true));
         _ = _scroll.ScrollToAsync(0, 0, false);
     }
@@ -182,10 +210,18 @@ public sealed class MainPage : ContentPage
     }
     private void ShowHome()
     {
-        Header(_account == null ? T("Войти в Telegram", "Sign in to Telegram") : _service?.IsDemo == true ? T("Демо", "Demo") : _account.FirstName);
+        Header(_account == null ? T("Войти в Telegram", "Sign in to Telegram") : null);
         if (_account != null)
         {
-            _body.Add(Text(Identity, 14, true));
+            var profile = new Grid { ColumnDefinitions = { new ColumnDefinition(56), new ColumnDefinition(GridLength.Star) }, ColumnSpacing = 14, Margin = new Thickness(0, 4, 0, 12) };
+            var initials = Text(string.IsNullOrWhiteSpace(_account.FirstName) ? "?" : StringInfo.GetNextTextElement(_account.FirstName).ToUpperInvariant(), 23);
+            initials.HorizontalTextAlignment = TextAlignment.Center; initials.VerticalTextAlignment = TextAlignment.Center;
+            initials.TextColor = Colors.White;
+            var avatar = new Border { Content = initials, StrokeThickness = 0, BackgroundColor = Color.FromArgb(TelegramPalette.Light.Accent), StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 28 }, WidthRequest = 56, HeightRequest = 56 };
+            var details = new VerticalStackLayout { Spacing = 3, VerticalOptions = LayoutOptions.Center };
+            var name = Text(_account.FirstName, 20); name.FontAttributes = FontAttributes.Bold;
+            details.Add(name); details.Add(Text("+" + _account.PhoneNumber.TrimStart('+'), 14, true));
+            profile.Add(avatar); profile.Add(details, 1); _body.Add(profile);
             _body.Add(Action(T("Проверить устройства", "Review devices"), async () => { _page = 1; RefreshNavigation(); ApplyAppearance(); await ShowDevicesAsync(); }, true));
             _body.Add(Action(T("Отключить приложение", "Disconnect this app"), RevokeConnectionAsync));
             return;
@@ -296,7 +332,11 @@ public sealed class MainPage : ContentPage
     private async Task ShowDevicesAsync()
     {
         if (!RequireAccount(T("Устройства", "Devices"))) return;
+#if ANDROID && DEBUG
+        await DelayNavigationProbeAsync();
+#endif
         var sessions = await _service!.GetSessionsAsync(Token);
+        Token.ThrowIfCancellationRequested();
         foreach (var session in sessions.OrderByDescending(s => s.IsCurrent).ThenByDescending(s => s.LastActive))
         {
             var row = new VerticalStackLayout { Spacing = 4, Padding = 12 };
@@ -327,7 +367,11 @@ public sealed class MainPage : ContentPage
     private async Task ShowSecurityAsync()
     {
         if (!RequireAccount(T("Защита", "Security"))) return;
+#if ANDROID && DEBUG
+        await DelayNavigationProbeAsync();
+#endif
         var state = await _service!.GetPasswordStateAsync(Token);
+        Token.ThrowIfCancellationRequested();
         _body.Add(Text(state.HasPassword ? T("Двухэтапная проверка включена", "Two-step verification is enabled") : T("Пароль не установлен", "No password is set"), 17));
         _body.Add(Text(state.HasRecoveryEmail ? T("Почта для восстановления подключена", "Recovery email is connected") : T("Почта для восстановления не подтверждена", "Recovery email is not confirmed"), 14, true));
         if (state.PendingRecoveryEmailPattern != null)
@@ -338,6 +382,13 @@ public sealed class MainPage : ContentPage
         }
         _body.Add(Action(state.HasPassword ? T("Изменить пароль", "Change password") : T("Настроить пароль", "Set a password"), () => { ShowPasswordForm(state); return Task.CompletedTask; }, true));
     }
+#if ANDROID && DEBUG
+    private Task DelayNavigationProbeAsync()
+    {
+        int delay = Microsoft.Maui.ApplicationModel.Platform.CurrentActivity?.Intent?.GetIntExtra("navigation_test_delay_ms", 0) ?? 0;
+        return _service?.IsDemo == true && delay > 0 ? Task.Delay(Math.Min(delay, 2000), Token) : Task.CompletedTask;
+    }
+#endif
     private void ShowPasswordForm(TelegramPasswordState state)
     {
         Header(T("Двухэтапная проверка", "Two-step verification"));
@@ -457,14 +508,14 @@ public sealed class MainPage : ContentPage
         try { await refresh(); }
         catch { await ShowOrDeferAlertAsync(T("Изменение подтверждено", "Change confirmed"), T("Не удалось обновить экран. Откройте раздел заново.", "Could not refresh the screen. Open this section again.")); }
     }
-    private async Task RunAsync(Func<Task> action)
+    private async Task RunAsync(Func<Task> action, bool navigation = false)
     {
         if (_busy || _suspended || _destroyed || _presentingAlerts) return;
-        _busy = true; _body.IsEnabled = false; _tabs.IsEnabled = false;
+        _busy = true; _body.IsEnabled = false; _tabs.IsEnabled = navigation;
         _progress.IsVisible = _progress.IsRunning = _cancel.IsVisible = true;
         _operation = new CancellationTokenSource();
         try { await action(); }
-        catch (OperationCanceledException) { await NoticeAsync(T("Ожидание отменено. Отправленный запрос мог выполниться; обновите данные перед повтором.", "Waiting was cancelled. A sent request may have completed; refresh the data before retrying.")); }
+        catch (OperationCanceledException) { if (!navigation) await NoticeAsync(T("Ожидание отменено. Отправленный запрос мог выполниться; обновите данные перед повтором.", "Waiting was cancelled. A sent request may have completed; refresh the data before retrying.")); }
         catch (TimeoutException) { await NoticeAsync(T("Telegram не ответил вовремя. Результат неизвестен: обновите данные перед повтором.", "Telegram did not respond in time. The result is unknown; refresh before retrying.")); }
         catch (TelegramLogoutUnconfirmedException) { await NoticeAsync(T("Результат выхода неизвестен. Проверьте список устройств в официальном Telegram, прежде чем повторять действие.", "The sign-out result is unknown. Check the device list in the official Telegram app before retrying.")); }
         catch (Exception ex) { await NoticeAsync(ex is TelegramException or InvalidOperationException ? AppStrings.Message(ex.Message, Language) : T("Не удалось выполнить действие. Проверьте подключение и повторите попытку.", "Could not complete the action. Check the connection and try again.")); }
@@ -524,6 +575,7 @@ public sealed class MainPage : ContentPage
     }
     private void ReleaseGlassPress()
     {
+        _tabs.CancelInteraction();
         _glass.SetSelectionPressed(false);
         if (_densitySlider?.Content is Grid grid)
             foreach (var child in grid.Children)
@@ -533,12 +585,20 @@ public sealed class MainPage : ContentPage
     {
         if (_destroyed) return;
         _suspended = false;
-        _ = ProcessPendingAsync();
+        _ = ResumePageAsync();
+    }
+    private async Task ResumePageAsync()
+    {
+        await ProcessPendingAsync();
+        if (_destroyed || _suspended || _busy || _navigating) return;
+        int target = _queuedNavigation ?? (_pageLoaded ? -1 : _page);
+        if (target >= 0) await NavigateAsync(target);
     }
     public Task ShutdownAsync()
     {
         if (_destroyed) return _connectionClose;
         _destroyed = true; _suspended = true;
+        _queuedNavigation = null;
         _operation?.Cancel(); ReleaseGlassPress();
         _deferredAlerts.Clear();
         return CloseConnectionAsync();

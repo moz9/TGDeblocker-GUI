@@ -19,6 +19,7 @@ public sealed class GlassSurfaceHandler : ViewHandler<GlassSurface, Android.View
         [nameof(GlassSurface.ReduceMotion)] = Update,
         [nameof(GlassSurface.ReduceTransparency)] = Update,
         [nameof(GlassSurface.SelectedIndex)] = Update,
+        [nameof(GlassSurface.SelectionPosition)] = Update,
         [nameof(GlassSurface.IsPressed)] = Update,
         [nameof(GlassSurface.IsDark)] = Update,
         [nameof(GlassSurface.Progress)] = Update,
@@ -46,6 +47,7 @@ public sealed class NativeGlassSurface : GLSurfaceView
     bool _started, _scheduled, _stopped;
     long _last, _autoRelease;
     int _lastSelection = -1;
+    bool _wasPressed;
     GlassSurface? _model;
     bool? _rendererStatus;
 
@@ -70,35 +72,44 @@ public sealed class NativeGlassSurface : GLSurfaceView
         _model = model;
         if (!model.IsSlider) _pageSurface = new WeakReference<NativeGlassSurface>(this);
         if (_rendererStatus is bool available) model.ReportRendererAvailability(available);
-        var position = model.IsSlider ? model.Progress : model.SelectedIndex / 4.0;
+        double targetPosition = model.SelectionPosition >= 0 ? model.SelectionPosition : model.SelectedIndex;
+        var position = model.IsSlider ? model.Progress : targetPosition / 4.0;
         var right = model.IsSlider ? position : position + .25;
         bool selectionChanged = !model.IsSlider && _lastSelection >= 0 && _lastSelection != model.SelectedIndex;
+        bool targetChanged = _started && Math.Abs(position - _left.Target) > .000001;
         if (!model.IsSlider) _lastSelection = model.SelectedIndex;
-        if (model.IsSlider)
+        if (model.IsSlider) { _left.Response = .13; _left.Damping = 1; }
+        else if (targetChanged)
         {
-            // The value follows the native thumb without changing its input semantics.
-            _left.Response = .13; _left.Damping = 1;
+            // During drag, compare to the previous target so reversal swaps the
+            // leading/trailing edge immediately without discarding either velocity.
+            bool forward = model.IsPressed ? position >= _left.Target : position >= (_left.Value + _right.Value - .25) * .5;
+            _left.Response = model.IsPressed ? (forward ? .19 : .12) : forward ? .34 : .25;
+            _left.Damping = model.IsPressed ? (forward ? .88 : .85) : forward ? .84 : .86;
+            _right.Response = model.IsPressed ? (forward ? .12 : .19) : forward ? .25 : .34;
+            _right.Damping = model.IsPressed ? (forward ? .85 : .88) : forward ? .86 : .84;
         }
-        else if (selectionChanged)
-        {
-            // Swap lead and trail on reversal while keeping both current velocities.
-            bool movingRight = position >= _left.Value;
-            _left.Response = movingRight ? .34 : .25;
-            _left.Damping = movingRight ? .84 : .86;
-            _right.Response = movingRight ? .25 : .34;
-            _right.Damping = movingRight ? .86 : .84;
-        }
-        if (!_started || model.ReduceMotion || !Android.Animation.ValueAnimator.AreAnimatorsEnabled())
-        {
-            _left.Snap(position); _right.Snap(right); _lift.Snap(0); _autoRelease = 0; _started = true;
-        }
+        if (!_started || model.ReduceMotion || model.ReduceTransparency || !Android.Animation.ValueAnimator.AreAnimatorsEnabled())
+        { _left.Snap(position); _right.Snap(right); _lift.Snap(0); _autoRelease = 0; _started = true; }
         else
         {
             _left.Target = position; _right.Target = right;
-            if (model.IsPressed) { _autoRelease = 0; _lift.Target = 1; }
-            else if (selectionChanged) { _autoRelease = Stopwatch.GetTimestamp() + (long)(Stopwatch.Frequency * .16); _lift.Target = 1; }
-            else if (_autoRelease == 0) _lift.Target = 0;
+            if (model.IsPressed)
+            {
+                if (!_wasPressed) { _lift.Response = .20; _lift.Damping = .86; }
+                _autoRelease = 0; _lift.Target = 1;
+            }
+            else if (_wasPressed)
+            {
+                _lift.Response = .34; _lift.Damping = .88;
+                if (_lift.Value < .1)
+                { _lift.Response = .18; _lift.Target = .65; _autoRelease = Stopwatch.GetTimestamp() + (long)(Stopwatch.Frequency * .14); }
+                else { _autoRelease = 0; _lift.Target = 0; }
+            }
+            else if (selectionChanged && model.SelectionPosition < 0)
+            { _lift.Response = .20; _lift.Damping = .86; _autoRelease = Stopwatch.GetTimestamp() + (long)(Stopwatch.Frequency * .18); _lift.Target = 1; }
         }
+        _wasPressed = model.IsPressed;
         Render();
         if (!_scheduled && (_left.Value != _left.Target || _right.Value != _right.Target || _lift.Value != _lift.Target))
         {
@@ -185,6 +196,9 @@ internal sealed class GlassRenderer(float density, int diagnostic, Action<bool> 
         GLES20.GlUniform4f(GLES20.GlGetUniformLocation(_program, "uState"), left, right, lift, material);
         GLES20.GlUniform2f(GLES20.GlGetUniformLocation(_program, "uFlags"), opaque ? 1 : 0, slider ? 1 : 0);
         GLES20.GlUniform2f(GLES20.GlGetUniformLocation(_program, "uInsets"), insetLeft, insetRight);
+        GLES20.GlUniform4f(GLES20.GlGetUniformLocation(_program, "uDock"), (float)GlassDockMetrics.Height,
+            (float)GlassDockMetrics.BottomInset, (float)GlassDockMetrics.HorizontalInset, (float)GlassDockMetrics.MaximumWidth);
+        GLES20.GlUniform2f(GLES20.GlGetUniformLocation(_program, "uSelectInset"), (float)GlassDockMetrics.SelectedInsetX, (float)GlassDockMetrics.SelectedInsetY);
         GLES20.GlUniform4f(GLES20.GlGetUniformLocation(_program, "uScene"), originX, originY, sceneWidth, sceneHeight);
         GLES20.GlUniform1f(GLES20.GlGetUniformLocation(_program, "uDiagnostic"), diagnostic);
         GLES20.GlUniform1f(GLES20.GlGetUniformLocation(_program, "uDark"), dark ? 1 : 0);
@@ -204,7 +218,7 @@ internal sealed class GlassRenderer(float density, int diagnostic, Action<bool> 
     // Snell edge displacement and sampled blurred source. It samples only this own scene.
     const string Fragment = """
 precision highp float;
-uniform vec2 uSize; uniform float uDpr; uniform vec4 uState; uniform vec2 uFlags; uniform vec2 uInsets; uniform float uDiagnostic; uniform float uDark; uniform vec4 uScene; uniform float uVelocity;
+uniform vec2 uSize; uniform float uDpr; uniform vec4 uState; uniform vec2 uFlags; uniform vec2 uInsets; uniform vec4 uDock; uniform vec2 uSelectInset; uniform float uDiagnostic; uniform float uDark; uniform vec4 uScene; uniform float uVelocity;
 float box(vec2 p, vec2 b, float r){vec2 q=abs(p)-b+r;return min(max(q.x,q.y),0.0)+length(max(q,0.0))-r;}
 float heightProfile(float t){return pow(max(0.0,1.0-pow(1.0-t,3.0)),1.0/3.0);}
 float bend(float t){float a=max(t-.002,0.0),b=min(t+.002,1.0);float angle=t<.001?1.5707963:atan((heightProfile(b)-heightProfile(a))/(b-a));return tan(angle-asin(sin(angle)/1.5))/tan(1.5707963-asin(1.0/1.5));}
@@ -243,6 +257,7 @@ vec3 glass(vec2 p,vec2 center,vec2 halfsize,float radius,vec3 base,float amount,
  float t=clamp(-d/12.,0.,1.);vec2 off=-n*bend(t)*amount*(uDiagnostic==1.0?0.0:1.0);
  vec3 col=uDiagnostic==2.0?source(p+off):blurred(p+off);
  col=mix(col,mix(vec3(.84,.93,.98),vec3(.26,.37,.45),uDark),mix(.10,.16,uDark)+uState.w*mix(.22,.14,uDark));
+ col=mix(col,mix(vec3(.62,.83,.96),vec3(.22,.48,.67),uDark),selected*(1.-uFlags.y)*(.30+clamp(uState.z,0.,1.)*.08));
  float rim=1.-smoothstep(0.,1.6,-d); float facing=dot(n,normalize(vec2(-.6,-.8)));
  float sheen=pow(1.-t,3.)*(.5+.5*facing);
  col+=rim*(mix(.08,.06,uDark)+mix(.09,.08,uDark)*max(facing,0.))+sheen*mix(.045,.07,uDark);
@@ -253,11 +268,16 @@ void main(){
  if(uFlags.y>.5){
   float start=uInsets.x, end=max(start,uSize.x-uInsets.y); float x=mix(start,end,clamp(uState.x,0.,1.)); vec2 mid=vec2((start+end)*.5,uSize.y*.5);
   float up=clamp(uState.z,0.,1.);float radius=12.+up*14.;float stretch=1.+min(.20,abs(uVelocity)*.06)*up;
+  radius=min(radius,max(1.,(min(x,uSize.x-x)-1.)/stretch));
   c=glass(p,vec2(x,mid.y),vec2(radius*stretch,radius/sqrt(stretch)),radius/sqrt(stretch),c,26.*smoothstep(0.,.65,up),1.);
  } else {
-  vec2 mid=vec2(uSize.x*.5,uSize.y-48.);float w=max(1.,uSize.x-32.);c=glass(p,mid,vec2(w*.5,32.),32.,c,10.,0.);
-  float up=clamp(uState.z,0.,1.);float l=clamp(uState.x,-.1,1.1),r=clamp(uState.y,-.1,1.1);float halfw=max(8.,(r-l)*w*.5-4.+up*6.);
-  c=glass(p,vec2(16.+(l+r)*w*.5,mid.y),vec2(halfw,27.+up*10.),min(26.+up*7.,halfw),c,7.+up*18.,1.);
+  float w=max(0.,min(uSize.x-2.*uDock.z,uDock.w));float x=(uSize.x-w)*.5;
+  vec2 mid=vec2(uSize.x*.5,uSize.y-uDock.y-uDock.x*.5);c=glass(p,mid,vec2(w*.5,uDock.x*.5),uDock.x*.5,c,10.,0.);
+  float up=clamp(uState.z,0.,1.);float l=clamp(uState.x,0.,1.),r=clamp(uState.y,0.,1.);
+  float basew=max(1.,w*.25-2.*uSelectInset.x);float raww=(r-l)*w-2.*uSelectInset.x;
+  float halfw=max(1.,(clamp(raww,basew*.84,basew*1.24)+up*12.)*.5);
+  float halfh=max(1.,(uDock.x-2.*uSelectInset.y+up*16.)*.5);
+  c=glass(p,vec2(x+(l+r)*w*.5,mid.y),vec2(halfw,halfh),min(23.+up*12.,min(halfw,halfh)),c,9.+up*18.,1.);
  }
  gl_FragColor=vec4(c,1.);
 }

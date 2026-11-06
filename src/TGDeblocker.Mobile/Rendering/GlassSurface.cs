@@ -9,6 +9,7 @@ public class GlassSurface : View
     public static readonly BindableProperty ReduceMotionProperty = BindableProperty.Create(nameof(ReduceMotion), typeof(bool), typeof(GlassSurface), false);
     public static readonly BindableProperty ReduceTransparencyProperty = BindableProperty.Create(nameof(ReduceTransparency), typeof(bool), typeof(GlassSurface), false);
     public static readonly BindableProperty SelectedIndexProperty = BindableProperty.Create(nameof(SelectedIndex), typeof(int), typeof(GlassSurface), 0, coerceValue: (_, value) => Math.Clamp((int)value, 0, 3));
+    public static readonly BindableProperty SelectionPositionProperty = BindableProperty.Create(nameof(SelectionPosition), typeof(double), typeof(GlassSurface), -1d, coerceValue: (_, value) => double.IsFinite((double)value) ? Math.Clamp((double)value, -1, 3) : -1d);
     public static readonly BindableProperty IsPressedProperty = BindableProperty.Create(nameof(IsPressed), typeof(bool), typeof(GlassSurface), false);
     public static readonly BindableProperty IsDarkProperty = BindableProperty.Create(nameof(IsDark), typeof(bool), typeof(GlassSurface), false);
     internal static readonly BindableProperty IsSliderProperty = BindableProperty.Create(nameof(IsSlider), typeof(bool), typeof(GlassSurface), false);
@@ -19,6 +20,7 @@ public class GlassSurface : View
     public bool ReduceMotion { get => (bool)GetValue(ReduceMotionProperty); set => SetValue(ReduceMotionProperty, value); }
     public bool ReduceTransparency { get => (bool)GetValue(ReduceTransparencyProperty); set => SetValue(ReduceTransparencyProperty, value); }
     public int SelectedIndex { get => (int)GetValue(SelectedIndexProperty); set => SetValue(SelectedIndexProperty, value); }
+    public double SelectionPosition { get => (double)GetValue(SelectionPositionProperty); set => SetValue(SelectionPositionProperty, value); }
     public bool IsPressed { get => (bool)GetValue(IsPressedProperty); set => SetValue(IsPressedProperty, value); }
     public bool IsDark { get => (bool)GetValue(IsDarkProperty); set => SetValue(IsDarkProperty, value); }
     internal bool IsSlider { get => (bool)GetValue(IsSliderProperty); set => SetValue(IsSliderProperty, value); }
