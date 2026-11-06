@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../WindowsVersion.props" />
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <RootNamespace>TGDeblocker.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/AppIcon.ico</ApplicationIcon>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <PublishTrimmed>false</PublishTrimmed>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="InstallerQaId" Value="$(InstallerQaId)" Condition="'$(InstallerQaId)' != ''" />
+    <EmbeddedResource Include="../../release/windows-update-public-key.txt" LogicalName="WindowsUpdatePublicKey" />
+    <Content Update="Assets/AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="Assets/AppIcon.png" CopyToOutputDirectory="PreserveNewest" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.5" />
+    <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
+    <PackageReference Include="tdlib.native.win-x64" Version="1.8.67" />
+    <ProjectReference Include="../TGDeblocker.Core/TGDeblocker.Core.csproj" />
+    <Compile Include="../Shared/ThemePreference.cs" Link="Shared/ThemePreference.cs" />
+    <Compile Include="../Shared/TelegramPalette.cs" Link="Shared/TelegramPalette.cs" />
+  </ItemGroup>
+  <Target Name="CopyWinUIResourcesToPublish" AfterTargets="Publish">
+    <!-- Unpackaged WinUI's publish pipeline omits the application's compiled XAML/PRI. -->
+    <Error Condition="!Exists('$(TargetDir)$(AssemblyName).pri')" Text="The WinUI resource index is missing." />
+    <ItemGroup><_WinUIPublishResource Include="$(TargetDir)*.xbf;$(TargetDir)$(AssemblyName).pri" /></ItemGroup>
+    <Copy SourceFiles="@(_WinUIPublishResource)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

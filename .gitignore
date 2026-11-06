@@ -1,0 +1,17 @@
+.vs/
+[Bb]in/
+[Oo]bj/
+*.suo
+*.user
+artifacts/
+dist/
+*.log
+**/tdlib_session/
+*.dpapi
+*.sqlite*
+*.binlog
+src/TGDeblocker.Mobile/Native/
+*.keystore
+*.jks
+*.p12
+*.mobileprovision

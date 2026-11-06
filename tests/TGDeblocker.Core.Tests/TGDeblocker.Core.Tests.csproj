@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" PrivateAssets="all" />
+    <PackageReference Include="tdlib.native.win-x64" Version="1.8.67" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+    <ProjectReference Include="../../src/TGDeblocker.Core/TGDeblocker.Core.csproj" />
+    <Compile Include="../../src/TGDeblocker.App/AppStrings.cs" Link="App/AppStrings.cs" />
+    <Compile Include="../../src/TGDeblocker.App/AppearanceSettings.cs" Link="App/AppearanceSettings.cs" />
+    <Compile Include="../../src/TGDeblocker.App/AppIdentity.cs" Link="App/AppIdentity.cs" />
+    <Compile Include="../../src/TGDeblocker.App/Updating/UpdateManifest.cs" Link="Updates/UpdateManifest.cs" />
+    <Compile Include="../../src/TGDeblocker.App/Updating/UpdateClient.cs" Link="Updates/UpdateClient.cs" />
+    <Compile Include="../../src/TGDeblocker.App/Updating/UpdatePaths.cs" Link="Updates/UpdatePaths.cs" />
+    <Compile Include="../../src/Shared/ThemePreference.cs" Link="Appearance/ThemePreference.cs" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>
