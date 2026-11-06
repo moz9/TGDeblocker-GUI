@@ -1,6 +1,6 @@
 # TGDeblocker
 
-Неофициальное приложение для Windows на WinUI 3 и TDLib. Проект не связан с Telegram.
+Неофициальное приложение для Windows и Android на основе TDLib. Проект не связан с Telegram.
 
 - Просмотр активных устройств и завершение сеансов.
 - Управление двухэтапной защитой и почтой восстановления.
@@ -9,9 +9,11 @@
 
 ## Установка и обновление
 
-Windows 10 версии 2004 или новее, x64. Скачайте установщик из [Releases](https://github.com/moz9/TGDeblocker-GUI/releases/latest) и выберите папку установки. Обновления проверяются в разделе «Настройки» установленного приложения.
+**Windows 10 2004+, x64:** [установщик](https://github.com/moz9/TGDeblocker-GUI/releases/latest) с выбором папки. Обновления проверяются в разделе «Настройки» приложения.
 
-Настройки, ключ базы и локальная сессия хранятся в `%LOCALAPPDATA%\TGDeblocker` и сохраняются при обновлении. При удалении программы их можно удалить отдельно; по умолчанию они сохраняются. Для подключения нужны API ID и API Hash с [my.telegram.org](https://my.telegram.org/apps). Реальный вход пока не тестировался.
+**Android 8+, ARM64:** [APK](https://github.com/moz9/TGDeblocker-GUI/releases/tag/android-v1.0.0). Устанавливается вручную; обновление Android внутри приложения пока не реализовано.
+
+В Windows настройки и локальная сессия хранятся в `%LOCALAPPDATA%\TGDeblocker` и сохраняются при обновлении. При удалении программы их можно удалить отдельно. Для подключения нужны API ID и API Hash с [my.telegram.org](https://my.telegram.org/apps). Реальный вход пока не тестировался.
 
 ## Сборка
 
@@ -23,6 +25,6 @@ dotnet test tests/TGDeblocker.Core.Tests/TGDeblocker.Core.Tests.csproj
 ./tools/publish.ps1
 ```
 
-Для установщика используйте `./tools/build-installer.ps1 -PayloadDirectory <путь> -Version <версия>` и Inno Setup.
+Для установщика используйте `./tools/build-installer.ps1 -PayloadDirectory <путь> -Version <версия>` и Inno Setup. [Сборка Android](src/TGDeblocker.Mobile/README.md).
 
 Основано на [TGDeblocker](https://github.com/Astaro212/TGDeblocker) автора [Astaro212](https://github.com/Astaro212). Уведомления о зависимостях — в [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
